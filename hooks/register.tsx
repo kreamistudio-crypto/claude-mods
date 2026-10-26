@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { Register, EngineInterface } from 'claude-code'
 
 // Stato della chat: gli avvisi sono accesi? a che percentuale siamo?
-const attivo = atom({ plugin: 'contesto', key: 'attivo' } as const, false)
+const attivo = atom({ plugin: 'contesto', key: 'attivo' } as const, true)
 const percentuale = atom({ plugin: 'contesto', key: 'percent' } as const, null)
 
 // Soglie dell'avviso (percentuale del contesto pieno), come nella chat di Barattolo.
@@ -66,8 +66,8 @@ async function aggiorna($: EngineInterface): Promise<void> {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
-      name: 'contesto',
-      description: 'Accende (o spegne) gli avvisi sul contesto in questa chat',
+      name: 'avvisi',
+      description: 'Spegne (o riaccende) gli avvisi sul contesto in questa chat',
     })
     await $.command.register({
       name: 'passaggio',
@@ -83,13 +83,13 @@ export const register: Register = on => {
     return done
   })
 
-  on('command.run', { command: 'contesto' }, async $ => {
+  on('command.run', { command: 'avvisi' }, async $ => {
     const ora = !(await read($, attivo))
     await update($, attivo, () => ora)
     if (!ora) {
       await update($, percentuale, () => null)
       $.ui.status(undefined)
-      return { text: '🔕 Avvisi sul contesto spenti in questa chat. /contesto per riaccenderli.' }
+      return { text: '🔕 Avvisi sul contesto spenti in questa chat. /avvisi per riaccenderli.' }
     }
     avvisato = 0
     const p = await leggi($)
