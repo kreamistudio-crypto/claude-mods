@@ -1,0 +1,7 @@
+{
+  "name": "contesto",
+  "version": "0.1.0",
+  "description": "Avvisi sul contesto a comando (/contesto) e passaggio di consegne completo (/passaggio), per qualsiasi chat",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}
