@@ -144,7 +144,13 @@ export const register: Register = on => {
         : p >= AVVISO
           ? `[mod contesto] Contesto al ${p}%. Avvisa in cima alla risposta, in una riga: «🟠 Contesto al ${p}%: è ora del passaggio di consegne, scrivi /passaggio».`
           : `[mod contesto] Contesto al ${p}%. Se ti chiedono a che punto è il contesto, rispondi con questo numero; altrimenti non dirlo.`
-    return next({ ...e, context: [...(e.context ?? []), nota] })
+    // Il contatore dei token in fondo a ogni risposta: dove la striscia non si vede, si vede qui.
+    const n = await read($, token)
+    const contatore =
+      n === null
+        ? ''
+        : ` Chiudi ogni risposta per l'utente (anche quella mandata con uno strumento di messaggi) con questa riga, a parte e identica: «${n > SOGLIA_TOKEN ? '🔴' : '🟢'} ${contaToken(n)}».`
+    return next({ ...e, context: [...(e.context ?? []), nota + contatore] })
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
