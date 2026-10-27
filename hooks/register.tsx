@@ -4,10 +4,28 @@ import type { Register, EngineInterface } from 'claude-code'
 // Stato della chat: gli avvisi sono accesi? a che percentuale siamo?
 const attivo = atom({ plugin: 'contesto', key: 'attivo' } as const, true)
 const percentuale = atom({ plugin: 'contesto', key: 'percent' } as const, null)
+const token = atom({ plugin: 'contesto', key: 'token' } as const, null)
 
 // Soglie dell'avviso (percentuale del contesto pieno), come nella chat di Barattolo.
 const AVVISO = 55
 const URGENTE = 65
+
+// Il contatore dei token: rosso oltre SOGLIA_TOKEN, tetto a TETTO_TOKEN (per decidere quando fare /compact).
+const SOGLIA_TOKEN = 300_000
+const TETTO_TOKEN = 1_000_000
+
+// 142380 → «142k», 1000000 → «1M»
+export function breve(n: number): string {
+  if (n >= 1_000_000) return `${+(n / 1_000_000).toFixed(2)}M`
+  if (n >= 1_000) return `${Math.round(n / 1_000)}k`
+  return `${n}`
+}
+
+// «142k / 1M token», e oltre la soglia «312k / 1M token · valuta /compact».
+export function contaToken(n: number): string {
+  const consiglio = n > SOGLIA_TOKEN ? ' · valuta /compact' : ''
+  return `${breve(Math.min(n, TETTO_TOKEN))} / ${breve(TETTO_TOKEN)} token${consiglio}`
+}
 
 // Il prompt che /passaggio manda al modello: il passaggio di consegne completo, per qualsiasi chat.
 const PASSAGGIO = `/passaggio — Scrivi adesso il PASSAGGIO DI CONSEGNE completo di questa chat, per ripartire in una chat nuova senza perdere NESSUN dettaglio, né della chat né del progetto.
@@ -41,7 +59,9 @@ let avvisato = 0
 
 async function leggi($: EngineInterface): Promise<number | undefined> {
   try {
-    return (await $.session.usage()).context.percent
+    const { context } = await $.session.usage()
+    if (context.tokens !== undefined) await update($, token, () => context.tokens ?? null)
+    return context.percent
   } catch {
     return undefined
   }
@@ -53,7 +73,9 @@ async function aggiorna($: EngineInterface): Promise<void> {
   if (p === undefined) return
   await update($, percentuale, () => p)
   const icona = p >= URGENTE ? '🔴' : p >= AVVISO ? '🟠' : '🧠'
-  $.ui.status(`${icona} contesto ${p}%`)
+  const n = await read($, token)
+  const rosso = n !== null && n > SOGLIA_TOKEN ? '🔴 ' : ''
+  $.ui.status(`${icona} contesto ${p}%${n === null ? '' : ` · ${rosso}${contaToken(n)}`}`)
   if (p >= URGENTE && avvisato < URGENTE) {
     avvisato = URGENTE
     $.ui.toast(`🔴 Contesto al ${p}%: scrivi /passaggio adesso e apri una chat nuova.`)
@@ -88,6 +110,7 @@ export const register: Register = on => {
     await update($, attivo, () => ora)
     if (!ora) {
       await update($, percentuale, () => null)
+      await update($, token, () => null)
       $.ui.status(undefined)
       return { text: '🔕 Avvisi sul contesto spenti in questa chat. /avvisi per riaccenderli.' }
     }
@@ -127,20 +150,29 @@ export const register: Register = on => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const p = await read($, percentuale)
     if (!(await read($, attivo)) || p === null || e.props.hasSurvey) return next(e)
+    const n = await read($, token)
     const { Box, Text } = $.ui.resolve(e)
     const icona = p >= URGENTE ? '🔴' : p >= AVVISO ? '🟠' : '🧠'
     const consiglio = p >= AVVISO ? ' · è ora di /passaggio' : ' · /passaggio per il passaggio di consegne'
+    const rosso = n !== null && n > SOGLIA_TOKEN
     return (
       <Box>
         <Text dimColor={p < AVVISO}>
-          {icona} contesto {p}%{consiglio}
+          {icona} contesto {p}%
         </Text>
+        {n !== null && (
+          <Text color={rosso ? 'error' : 'success'} bold={rosso}>
+            {' · '}{rosso ? '🔴' : '🟢'} {contaToken(n)}
+          </Text>
+        )}
+        <Text dimColor={p < AVVISO}>{consiglio}</Text>
       </Box>
     )
   })
 
   on('session.compact', async ($, e, next) => {
     if (e.agentId !== undefined || !(await read($, attivo))) return next(e)
+    await update($, token, () => null)
     const instructions = e.instructions ? `${e.instructions}\n\n${DA_CONSERVARE}` : DA_CONSERVARE
     return next({ ...e, instructions })
   }).catch(($, e, next) => next(e))

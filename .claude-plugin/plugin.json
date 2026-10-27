@@ -1,7 +1,7 @@
 {
   "name": "contesto",
-  "version": "0.2.0",
-  "description": "Avvisi sul contesto sempre accesi (/avvisi per spegnerli) e passaggio di consegne completo (/passaggio), per qualsiasi chat",
+  "version": "0.3.0",
+  "description": "Avvisi sul contesto e token usati (rossi oltre 300k) sempre accesi (/avvisi per spegnerli) e passaggio di consegne completo (/passaggio), per qualsiasi chat",
   "license": "MIT",
   "types": "./types/index.d.ts"
 }
